@@ -8,7 +8,7 @@
 
   <!-- Load arm description, state and controllers in simulation mode -->
   <include file="$(find turtlebot_arm_bringup)/launch/arm.launch">
-    <arg name="simulation" value="true"/>
+    <arg name="simulation" value="false"/>
   </include>
 
   <!-- Run the main MoveIt executable -->

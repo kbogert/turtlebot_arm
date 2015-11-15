@@ -30,6 +30,9 @@
     <parent link="base_link"/>
     <child link="arm_base_link"/>
   </joint>
+  <!-- fake gripper_link joint gives us a free servo!
+         this makes us 5DOF and saves you $44.90
+         that's a lot of coin! -->
   <link name="gripper_link"/>
   <joint name="gripper_link_joint" type="revolute">
     <origin rpy="0 -1.57 0" xyz="0 0 0.112"/>
@@ -38,6 +41,7 @@
     <limit effort="30" lower="-3.14" upper="3.14" velocity="1"/>
     <axis xyz="1 0 0"/>
   </joint>
+  <!-- shoulder pan joint -->
   <joint name="arm_shoulder_pan_servo_joint" type="fixed">
     <origin rpy="1.570795 0 1.570795" xyz="0 0 0"/>
     <parent link="arm_base_link"/>
@@ -54,7 +58,7 @@
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/ax12_box.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Gray"/>
+      <material name="Black"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 0.0 -0.01241"/>
@@ -101,6 +105,7 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- shoulder lift joint -->
   <joint name="arm_shoulder_lift_servo_joint" type="fixed">
     <origin rpy="0 3.14159 0" xyz="0 0 -0.0415"/>
     <parent link="arm_shoulder_pan_link"/>
@@ -117,7 +122,7 @@
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/ax12_box.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Gray"/>
+      <material name="Black"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 0.0 -0.01241"/>
@@ -134,7 +139,7 @@
   <joint name="arm_shoulder_lift_joint" type="revolute">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <limit effort="30" lower="-2.617" upper="2.617" velocity="1.571"/>
+    <limit effort="30" lower="-2.2" upper="2.16" velocity="1.571"/>
     <dynamics friction="0.13"/>
     <parent link="arm_shoulder_lift_servo_link"/>
     <child link="arm_shoulder_lift_link"/>
@@ -284,6 +289,7 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- elbow joint -->
   <joint name="arm_elbow_flex_servo_joint" type="fixed">
     <origin rpy="0 3.14159 0" xyz="0 0 -0.0415"/>
     <parent link="arm_shoulder_F3_0_link"/>
@@ -300,7 +306,7 @@
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/ax12_box.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Gray"/>
+      <material name="Black"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 0.0 -0.01241"/>
@@ -317,7 +323,7 @@
   <joint name="arm_elbow_flex_joint" type="revolute">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <limit effort="30" lower="-2.617" upper="2.617" velocity="1.571"/>
+    <limit effort="30" lower="-2.42" upper="2.38" velocity="1.571"/>
     <dynamics friction="0.13"/>
     <parent link="arm_elbow_flex_servo_link"/>
     <child link="arm_elbow_flex_link"/>
@@ -467,6 +473,7 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- wrist joint -->
   <joint name="arm_wrist_flex_servo_joint" type="fixed">
     <origin rpy="0 3.14159 0" xyz="0 0 -0.0415"/>
     <parent link="arm_elbow_F3_0_link"/>
@@ -483,7 +490,7 @@
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/ax12_box.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Gray"/>
+      <material name="Black"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 0.0 -0.01241"/>
@@ -500,7 +507,7 @@
   <joint name="arm_wrist_flex_joint" type="revolute">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <limit effort="30" lower="-1.745" upper="1.745" velocity="1.571"/>
+    <limit effort="30" lower="-1.72" upper="1.68" velocity="1.571"/>
     <dynamics friction="0.13"/>
     <parent link="arm_wrist_flex_servo_link"/>
     <child link="arm_wrist_flex_link"/>
@@ -530,6 +537,7 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- gripper - Load either Turtlebot gripper or Pincher Gripper -->
   <joint name="arm_wrist_F3_0_joint" type="fixed">
     <origin rpy="0 3.14159 -3.14159" xyz="0 0 0.0265"/>
     <parent link="arm_wrist_flex_link"/>
@@ -560,6 +568,7 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- gripper joint -->
   <joint name="gripper_servo_joint" type="fixed">
     <origin rpy="1.570795 3.14159 1.570795" xyz="0 0 -0.019"/>
     <parent link="arm_wrist_F3_0_link"/>
@@ -576,7 +585,7 @@
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/ax12_box.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Gray"/>
+      <material name="Black"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 0.0 -0.01241"/>
@@ -620,10 +629,11 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- Finger 1 -->
   <joint name="gripper_joint" type="prismatic">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit effort="30" lower="0.002" upper="0.031" velocity="0.5"/>
+    <limit effort="30" lower="0.000" upper="0.0315" velocity="0.5"/>
     <parent link="gripper_servo_link"/>
     <child link="gripper_active_link"/>
   </joint>
@@ -652,6 +662,8 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- Finger 2 -->
+  <!-- Note: currently static but should be a Mimic of Finger 1 -->
   <joint name="gripper2_joint" type="fixed">
     <parent link="gripper_servo_link"/>
     <child link="gripper_active2_link"/>
@@ -681,5 +693,16 @@
     <selfCollide>true</selfCollide>
     <gravity>true</gravity>
   </gazebo>
+  <!-- Using Mimic -->
+  <!-- gripper 2 joint -->
+  <!--  ### Mimic would be better but causes Missing Joint error in Moveit 
+      <joint name="gripper2_joint" type="prismatic">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit effort="30" velocity="0.5" lower="0.002" upper="0.031"/>
+      <parent link="gripper_servo_link"/>
+      <child link="gripper_active2_link"/>
+      <mimic joint="gripper_joint" multiplier="-.5"  offset = "0"/>
+    </joint-->
 </robot>
 
