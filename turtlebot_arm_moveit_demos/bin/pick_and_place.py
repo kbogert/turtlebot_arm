@@ -44,7 +44,7 @@ GROUP_NAME_ARM = 'arm'
 GROUP_NAME_GRIPPER = 'gripper'
 
 GRIPPER_FRAME = 'gripper_link'
-GRIPPER_JOINT_NAMES = ['gripper_joint']
+GRIPPER_JOINT_NAMES = ['gripper_joint', 'gripper2_joint']
 GRIPPER_EFFORT = [1.0]
 GRIPPER_PARAM = '/gripper_controller'
 
@@ -58,10 +58,12 @@ class MoveItDemo:
 
         rospy.init_node('moveit_demo')
 
-        self.gripper_opened = [rospy.get_param(GRIPPER_PARAM + "/max_opening") - 0.001]
-        self.gripper_closed = [rospy.get_param(GRIPPER_PARAM + "/min_opening") + 0.001]
-        self.gripper_neutral = [rospy.get_param(GRIPPER_PARAM + "/neutral",
-                                                (self.gripper_opened[0] + self.gripper_closed[0])/2.0) ]
+        self.gripper_opened = {GRIPPER_JOINT_NAMES[0] : rospy.get_param(GRIPPER_PARAM + "/max_opening") - 0.001, GRIPPER_JOINT_NAMES[1] : -(rospy.get_param(GRIPPER_PARAM + "/max_opening") - 0.001) }
+        self.gripper_closed = {GRIPPER_JOINT_NAMES[0] : rospy.get_param(GRIPPER_PARAM + "/min_opening") + 0.001, GRIPPER_JOINT_NAMES[1] : -(rospy.get_param(GRIPPER_PARAM + "/min_opening") + 0.001) }
+        self.gripper_neutral = { GRIPPER_JOINT_NAMES[0] : (rospy.get_param(GRIPPER_PARAM + "/neutral",
+                                                (self.gripper_opened[GRIPPER_JOINT_NAMES[0]] + self.gripper_closed[GRIPPER_JOINT_NAMES[0]])/2.0)),
+                                 GRIPPER_JOINT_NAMES[1] : (rospy.get_param(GRIPPER_PARAM + "/neutral",
+                                                (self.gripper_opened[GRIPPER_JOINT_NAMES[1]] + self.gripper_closed[GRIPPER_JOINT_NAMES[1]])/2.0)) }
         
         self.gripper_tighten = rospy.get_param(GRIPPER_PARAM + "/tighten", 0.0) 
 
@@ -142,25 +144,25 @@ class MoveItDemo:
         rospy.sleep(2)
 
         # Move the gripper to the closed position
-#        rospy.loginfo("Set Gripper: Close " + str(self.gripper_closed ) )
- #       gripper.set_joint_value_target(self.gripper_closed)   
-  #      if gripper.go() != True:
-   #         rospy.logwarn("  Go failed")
-    #    rospy.sleep(2)
+        rospy.loginfo("Set Gripper: Close " + str(self.gripper_closed ) )
+        gripper.set_joint_value_target(self.gripper_closed)   
+        if gripper.go() != True:
+            rospy.logwarn("  Go failed")
+        rospy.sleep(2)
          
         # Move the gripper to the neutral position
-     #   rospy.loginfo("Set Gripper: Neutral " + str(self.gripper_neutral) )
-      #  gripper.set_joint_value_target(self.gripper_neutral)
-       # if gripper.go() != True:
-        #    rospy.logwarn("  Go failed")
-        #rospy.sleep(2)
+        rospy.loginfo("Set Gripper: Neutral " + str(self.gripper_neutral) )
+        gripper.set_joint_value_target(self.gripper_neutral)
+        if gripper.go() != True:
+            rospy.logwarn("  Go failed")
+        rospy.sleep(2)
 
         # Move the gripper to the open position
- #       rospy.loginfo("Set Gripper: Open " +  str(self.gripper_opened))
-  #      gripper.set_joint_value_target(self.gripper_opened)
-   #     if gripper.go() != True:
-    #        rospy.logwarn("  Go failed")
-     #   rospy.sleep(2)
+        rospy.loginfo("Set Gripper: Open " +  str(self.gripper_opened))
+        gripper.set_joint_value_target(self.gripper_opened)
+        if gripper.go() != True:
+            rospy.logwarn("  Go failed")
+        rospy.sleep(2)
             
         # Set the height of the table off the ground
         table_ground = 0.4
@@ -322,7 +324,7 @@ class MoveItDemo:
 
         # Set the joint names to the gripper joint names
         t.header.stamp = rospy.get_rostime()
-        t.joint_names = GRIPPER_JOINT_NAMES
+        t.joint_names = [ GRIPPER_JOINT_NAMES[0] ]
 
         # Initialize a joint trajectory point to represent the goal
         tp = JointTrajectoryPoint()
@@ -367,7 +369,7 @@ class MoveItDemo:
 
         # Set the pre-grasp and grasp postures appropriately;
         # grasp_opening should be a bit smaller than target width
-        g.pre_grasp_posture = self.make_gripper_posture(self.gripper_opened)
+        g.pre_grasp_posture = self.make_gripper_posture([ self.gripper_opened[GRIPPER_JOINT_NAMES[0]] ])
         g.grasp_posture = self.make_gripper_posture(grasp_opening)
 
         # Set the approach and retreat parameters as desired

@@ -633,7 +633,7 @@
   <joint name="gripper_joint" type="prismatic">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit effort="30" lower="0.0005" upper="0.0155" velocity="0.5"/>
+    <limit effort="30" lower="0.0005" upper="0.031" velocity="0.5"/>
     <parent link="gripper_servo_link"/>
     <child link="gripper_active_link"/>
   </joint>
@@ -698,7 +698,7 @@
   <joint name="gripper2_joint" type="prismatic">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit effort="30" lower="0.0005" upper="0.0155" velocity="0.5"/>
+    <limit effort="30" lower="-0.031" upper="-0.0005" velocity="0.5"/>
     <parent link="gripper_servo_link"/>
     <child link="gripper_active2_link"/>
     <mimic joint="gripper_joint" multiplier="-1" offset="0"/>
