@@ -142,25 +142,25 @@ class MoveItDemo:
         rospy.sleep(2)
 
         # Move the gripper to the closed position
-        rospy.loginfo("Set Gripper: Close " + str(self.gripper_closed ) )
-        gripper.set_joint_value_target(self.gripper_closed)   
-        if gripper.go() != True:
-            rospy.logwarn("  Go failed")
-        rospy.sleep(2)
+#        rospy.loginfo("Set Gripper: Close " + str(self.gripper_closed ) )
+ #       gripper.set_joint_value_target(self.gripper_closed)   
+  #      if gripper.go() != True:
+   #         rospy.logwarn("  Go failed")
+    #    rospy.sleep(2)
          
         # Move the gripper to the neutral position
-        rospy.loginfo("Set Gripper: Neutral " + str(self.gripper_neutral) )
-        gripper.set_joint_value_target(self.gripper_neutral)
-        if gripper.go() != True:
-            rospy.logwarn("  Go failed")
-        rospy.sleep(2)
+     #   rospy.loginfo("Set Gripper: Neutral " + str(self.gripper_neutral) )
+      #  gripper.set_joint_value_target(self.gripper_neutral)
+       # if gripper.go() != True:
+        #    rospy.logwarn("  Go failed")
+        #rospy.sleep(2)
 
         # Move the gripper to the open position
-        rospy.loginfo("Set Gripper: Open " +  str(self.gripper_opened))
-        gripper.set_joint_value_target(self.gripper_opened)
-        if gripper.go() != True:
-            rospy.logwarn("  Go failed")
-        rospy.sleep(2)
+ #       rospy.loginfo("Set Gripper: Open " +  str(self.gripper_opened))
+  #      gripper.set_joint_value_target(self.gripper_opened)
+   #     if gripper.go() != True:
+    #        rospy.logwarn("  Go failed")
+     #   rospy.sleep(2)
             
         # Set the height of the table off the ground
         table_ground = 0.4
@@ -229,13 +229,19 @@ class MoveItDemo:
         place_pose.pose.position.x = table_pose.pose.position.x - 0.03
         place_pose.pose.position.y = -0.15
         place_pose.pose.position.z = table_ground + table_size[2] + target_size[2] / 2.0
+#        place_pose.pose.position.x = target_pose.pose.position.x
+ #       place_pose.pose.position.y = target_pose.pose.position.y
+  #      place_pose.pose.position.z = target_pose.pose.position.z
         place_pose.pose.orientation.w = 1.0
 
         # Initialize the grasp pose to the target pose
         grasp_pose = target_pose
 
         # Shift the grasp pose by half the width of the target to center it
-        grasp_pose.pose.position.y -= target_size[1] / 2.0
+        grasp_pose.pose.position.y += target_size[1] / 2.0
+
+        # make sure the object is deep inside the pinchers
+        grasp_pose.pose.position.x += target_size[0] / 1.5
 
         # Generate a list of grasps
         grasps = self.make_grasps(grasp_pose, [target_id], [target_size[1] - self.gripper_tighten])

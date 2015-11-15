@@ -600,7 +600,7 @@
     <gravity>true</gravity>
   </gazebo>
   <joint name="gripper_finger_base_joint" type="fixed">
-    <origin rpy="1.570795 -3.14159 1.570795" xyz="0.01  0.038 0"/>
+    <origin rpy="1.570795 -3.14159 1.570795" xyz="0.0175  0.038 0"/>
     <parent link="gripper_servo_link"/>
     <child link="gripper_finger_base_link"/>
   </joint>
@@ -633,7 +633,7 @@
   <joint name="gripper_joint" type="prismatic">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit effort="30" lower="0.000" upper="0.0315" velocity="0.5"/>
+    <limit effort="30" lower="0.0005" upper="0.0155" velocity="0.5"/>
     <parent link="gripper_servo_link"/>
     <child link="gripper_active_link"/>
   </joint>
@@ -644,14 +644,14 @@
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
     <visual>
-      <origin rpy="-1.570795 0 0" xyz="-0.02 0.023 0"/>
+      <origin rpy="-1.570795 0 0" xyz="0 0.023 0"/>
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/pincher_finger.stl" scale=".01 .01 .01"/>
       </geometry>
       <material name="Gray"/>
     </visual>
     <collision>
-      <origin rpy="-1.570795 0 0" xyz="-0.02 0.023 0"/>
+      <origin rpy="-1.570795 0 0" xyz="0 0.023 0"/>
       <geometry>
         <box size="0.036 0.028 0.004"/>
       </geometry>
@@ -664,10 +664,10 @@
   </gazebo>
   <!-- Finger 2 -->
   <!-- Note: currently static but should be a Mimic of Finger 1 -->
-  <joint name="gripper2_joint" type="fixed">
-    <parent link="gripper_servo_link"/>
-    <child link="gripper_active2_link"/>
-  </joint>
+  <!--   <joint name="gripper2_joint" type="fixed">
+      <parent link="gripper_servo_link"/>
+      <child link="gripper_active2_link"/>
+    </joint>   -->
   <link name="gripper_active2_link">
     <inertial>
       <mass value="0.00001"/>
@@ -675,14 +675,14 @@
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
     <visual>
-      <origin rpy="-1.570795 3.14159 0" xyz="-0.02 0.023 0"/>
+      <origin rpy="-1.570795 3.14159 0" xyz="0 0.023 0"/>
       <geometry>
         <mesh filename="package://turtlebot_arm_description/meshes/pincher_finger.stl" scale=".01 .01 .01"/>
       </geometry>
       <material name="Gray"/>
     </visual>
     <collision>
-      <origin rpy="-1.570795 3.14159 0" xyz="-0.02 0.023 0"/>
+      <origin rpy="-1.570795 3.14159 0" xyz="0 0.023 0"/>
       <geometry>
         <box size="0.036 0.028 0.004"/>
       </geometry>
@@ -695,14 +695,13 @@
   </gazebo>
   <!-- Using Mimic -->
   <!-- gripper 2 joint -->
-  <!--  ### Mimic would be better but causes Missing Joint error in Moveit 
-      <joint name="gripper2_joint" type="prismatic">
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <axis xyz="0 0 1"/>
-      <limit effort="30" velocity="0.5" lower="0.002" upper="0.031"/>
-      <parent link="gripper_servo_link"/>
-      <child link="gripper_active2_link"/>
-      <mimic joint="gripper_joint" multiplier="-.5"  offset = "0"/>
-    </joint-->
+  <joint name="gripper2_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="30" lower="0.0005" upper="0.0155" velocity="0.5"/>
+    <parent link="gripper_servo_link"/>
+    <child link="gripper_active2_link"/>
+    <mimic joint="gripper_joint" multiplier="-1" offset="0"/>
+  </joint>
 </robot>
 

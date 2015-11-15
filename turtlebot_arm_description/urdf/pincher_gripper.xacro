@@ -11,42 +11,42 @@
     </dynamixel_AX12_fixed>
     
      <gripper_finger_base parent="gripper_servo_link" name="gripper_finger_base" color="${color}">
-      <origin xyz="0.01  ${AX12_WIDTH} 0" rpy="${M_PI/2} ${-M_PI} ${M_PI/2}"/>
+      <origin xyz="0.0175  ${AX12_WIDTH} 0" rpy="${M_PI/2} ${-M_PI} ${M_PI/2}"/>
     </gripper_finger_base>
   
      <!-- Finger 1 --> 
     <joint name="gripper_joint" type="prismatic">
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <axis xyz="1 0 0"/>
-      <limit effort="30" velocity="0.5" lower="0.0005" upper="0.0315"/>
+      <limit effort="30" velocity="0.5" lower="0.0005" upper="0.0155"/>
       <parent link="gripper_servo_link"/>
       <child link="gripper_active_link"/>
     </joint> 
     
     <pincher_gripper name="gripper_active" color="${color}" >
-      <origin xyz="-0.02 0.023 0" rpy="${-M_PI/2} 0 0"/>
+      <origin xyz="0 0.023 0" rpy="${-M_PI/2} 0 0"/>
     </pincher_gripper>
      
+
     <!-- Finger 2 --> 
     <!-- Note: currently static but should be a Mimic of Finger 1 -->
-    <joint name="gripper2_joint" type="fixed">
+ <!--   <joint name="gripper2_joint" type="fixed">
       <parent link="gripper_servo_link"/>
       <child link="gripper_active2_link"/>
-    </joint>  
+    </joint>   -->
     
     <pincher_gripper name="gripper_active2" color="${color}" >
-      <origin xyz="-0.02 0.023 0" rpy="${-M_PI/2} ${M_PI} 0"/>
+      <origin xyz="0 0.023 0" rpy="${-M_PI/2} ${M_PI} 0"/>
     </pincher_gripper>
       
     <!-- Using Mimic -->
     <!-- gripper 2 joint -->
-    <!--  ### Mimic would be better but causes Missing Joint error in Moveit 
       <joint name="gripper2_joint" type="prismatic">
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <axis xyz="0 0 1"/>
-      <limit effort="30" velocity="0.5" lower="0.002" upper="0.031"/>
+      <axis xyz="1 0 0"/>
+      <limit effort="30" velocity="0.5" lower="0.0005" upper="0.0155"/>
       <parent link="gripper_servo_link"/>
       <child link="gripper_active2_link"/>
-      <mimic joint="gripper_joint" multiplier="-.5"  offset = "0"/>
-    </joint-->  
+      <mimic joint="gripper_joint" multiplier="-1" offset = "0"/>
+    </joint>  
 </robot>
