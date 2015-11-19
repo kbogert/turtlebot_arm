@@ -31,15 +31,20 @@
 #include <ros/ros.h>
 #include <tf/tf.h>
 
+#include <yocs_math_toolkit/common.hpp>
+
+#include <std_srvs/Empty.h>
+#include <geometry_msgs/PoseArray.h>
+
 #include <actionlib/server/simple_action_server.h>
 #include <turtlebot_arm_object_manipulation/PickAndPlaceAction.h>
 #include <turtlebot_arm_object_manipulation/MoveToTargetAction.h>
 
 #include <moveit_msgs/Grasp.h>
+#include <moveit_msgs/PlanningScene.h>
 #include <moveit/move_group_interface/move_group.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 
-#include <geometry_msgs/PoseArray.h>
 
 namespace turtlebot_arm_object_manipulation
 {
@@ -47,8 +52,6 @@ namespace turtlebot_arm_object_manipulation
 class PickAndPlaceServer
 {
 private:
-
-  ros::NodeHandle nh_;
   actionlib::SimpleActionServer<turtlebot_arm_object_manipulation::PickAndPlaceAction> as_;
   std::string action_name_;
 
@@ -57,7 +60,10 @@ private:
   turtlebot_arm_object_manipulation::PickAndPlaceGoalConstPtr goal_;
 
   ros::Publisher target_pose_pub_;
-  ros::Subscriber pick_and_place_sub_;
+  ros::Subscriber planning_scene_sub_;
+
+  std_srvs::Empty empty_srv_;
+  ros::ServiceClient clear_octomap_srv_;
 
   // Move groups to control arm and gripper with MoveIt!
   moveit::planning_interface::MoveGroup arm_;
@@ -65,6 +71,7 @@ private:
 
   // We use the planning_scene_interface::PlanningSceneInterface to manipulate the world
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
+  std::vector<moveit_msgs::AttachedCollisionObject> attached_collision_objs_;
 
   // Pick and place parameters
   std::string arm_link;
@@ -78,15 +85,15 @@ private:
   const int PLACE_ATTEMPTS = PICK_ATTEMPTS;
 
 public:
-  PickAndPlaceServer(const std::string name,
-                     const moveit::planning_interface::MoveGroup& arm,
-                     const moveit::planning_interface::MoveGroup& gripper) :
-    nh_("~"), as_(name, false), action_name_(name), arm_(arm), gripper_(gripper)
+  PickAndPlaceServer(const std::string name) :
+    as_(name, false), action_name_(name), arm_("arm"), gripper_("gripper")
   {
+    ros::NodeHandle nh("~");
+
     // Read specific pick and place parameters
-    nh_.param("grasp_attach_time", attach_time, 0.8);
-    nh_.param("grasp_detach_time", detach_time, 0.6);
-    nh_.param("vertical_backlash", z_backlash, 0.01);
+    nh.param("grasp_attach_time", attach_time, 0.8);
+    nh.param("grasp_detach_time", detach_time, 0.6);
+    nh.param("vertical_backlash", z_backlash, 0.01);
 
     // Register the goal and feedback callbacks
     as_.registerGoalCallback(boost::bind(&PickAndPlaceServer::goalCB, this));
@@ -94,12 +101,25 @@ public:
 
     as_.start();
 
-    target_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/target_pose", 1, true);
+    // We will clear the octomap and retry whenever a pick/place fails
+    clear_octomap_srv_ = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
+
+    // We subscribe to planning scene to keep track of attached/detached objects
+    planning_scene_sub_ = nh.subscribe("/move_group/monitored_planning_scene", 1, &PickAndPlaceServer::sceneCB, this);
+
+    // We publish the pick and place poses for debugging purposes
+    target_pose_pub_ = nh.advertise<geometry_msgs::PoseStamped>("/target_pose", 1, true);
+  }
+
+  ~PickAndPlaceServer()
+  {
+    as_.shutdown();
   }
 
   void goalCB()
   {
     ROS_INFO("[pick and place] Received goal!");
+
     goal_ = as_.acceptNewGoal();
     arm_link = goal_->frame;
     gripper_open = goal_->gripper_open;
@@ -128,90 +148,39 @@ public:
     as_.setPreempted();
   }
 
-
-  std::string pose2str3D(const geometry_msgs::Pose& pose)
+  void sceneCB(const moveit_msgs::PlanningScene& scene)
   {
-    tf::Transform tf;
-    tf::poseMsgToTF(pose, tf);
-    double roll, pitch, yaw;
-    tf::Matrix3x3(tf.getRotation()).getRPY(roll, pitch, yaw);
-
-    char ___buffer___[100];
-    sprintf(___buffer___, "%.2f, %.2f, %.2f,  %.2f, %.2f, %.2f",
-            pose.position.x, pose.position.y, pose.position.z,
-            roll, pitch, yaw);
-    return std::string(___buffer___);
+    // Keep attached collision objects so we can subtract its pose from the place location poses
+    attached_collision_objs_ = scene.robot_state.attached_collision_objects;
   }
-
-//  0.17, -0.01, 0.04,  0.67, 0.84, 0.74
-//  0.17, -0.01, 0.04,  1.30, -1.16, 1.75
-//
-//
-//  0.18, -0.12, 0.05,  0.13,  1.00, -2.61
-//  0.18, -0.12, 0.05, -0.98, -0.29,  1.76
-//  0.18, -0.12, 0.05,  0.59, -0.88, -0.33
-//  0.18, -0.12, 0.05,  0.93, -0.47, -0.89
-//  0.18, -0.12, 0.05, -1.01, -0.12,  1.85
-//  0.18, -0.12, 0.05, -0.52,  0.92,  2.89
-
-
 
   bool pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& pick_pose,
                                                  const geometry_msgs::Pose& place_pose)
   {
-//    planning_scene_interface_. remove(std::vector<std::string>(1, co.id));
-//    scene.remove_attached_object(GRIPPER_FRAME, "block_1")
-    ROS_ERROR_STREAM(obj_name   << " object     " << arm_.getEndEffectorLink() << "   "<<arm_.getEndEffector() << "   " << planning_scene_interface_.getKnownObjectNames(false).size());
-
-    std::map<std::string, geometry_msgs::Pose> ao_poses = planning_scene_interface_.getObjectPoses(std::vector<std::string>(1, obj_name));
-    for (std::pair<std::string, geometry_msgs::Pose> ao_pose: ao_poses)
+    if (pick(obj_name, pick_pose))
     {
-      ROS_ERROR_STREAM("BEFORE PICK   " << ao_pose.first << " object at " << pose2str3D(ao_pose.second) << "        "<< arm_.getEndEffectorLink() << "   "<<arm_.getEndEffector());
-    }
-
-
-    if ((pick(obj_name, pick_pose)))////////////////////// && (place(obj_name, place_pose)))
-    {
-      std::map<std::string, geometry_msgs::Pose> ao_poses = planning_scene_interface_.getObjectPoses(std::vector<std::string>(1, obj_name));
-      for (std::pair<std::string, geometry_msgs::Pose> ao_pose: ao_poses)
+      if (place(obj_name, place_pose))
       {
-        ROS_ERROR_STREAM("AFTER PICK    " << ao_pose.first << " object at " << pose2str3D(ao_pose.second) << "        "<< arm_.getEndEffectorLink() << "   "<<arm_.getEndEffector());
-      }
-      arm_.attachObject(obj_name, arm_.getEndEffectorLink());
-      ao_poses = planning_scene_interface_.getObjectPoses(std::vector<std::string>(1, obj_name));
-      for (std::pair<std::string, geometry_msgs::Pose> ao_pose: ao_poses)
-      {
-        ROS_ERROR_STREAM("AFTER ATTACH    " << ao_pose.first << " object at " << pose2str3D(ao_pose.second) << "        "<< arm_.getEndEffectorLink() << "   "<<arm_.getEndEffector());
-      }
-
-
-      if  (place(obj_name, place_pose))
-      {
-        std::map<std::string, geometry_msgs::Pose> ao_poses = planning_scene_interface_.getObjectPoses(std::vector<std::string>(1, obj_name));
-        for (std::pair<std::string, geometry_msgs::Pose> ao_pose: ao_poses)
-        {
-          ROS_ERROR_STREAM("AFTER PLACE    " << ao_pose.first << " object at " << pose2str3D(ao_pose.second) << "        "<< arm_.getEndEffectorLink() << "   "<<arm_.getEndEffector());
-        }
         as_.setSucceeded(result_);
         return true;
       }
+      else
+      {
+        // Ensure we don't retain any object attached to the gripper
+        arm_.detachObject(obj_name);
+        setGripper(gripper_open);
+      }
     }
-//    else
-//    {
-//      std::map<std::string, geometry_msgs::Pose> ao_poses = planning_scene_interface_.getObjectPoses(std::vector<std::string>(1, obj_name));
-//      for (std::pair<std::string, geometry_msgs::Pose> ao_pose: ao_poses)
-//      {
-//        ROS_ERROR_STREAM(ao_pose.first << " object at " << pose2str3D(ao_pose.second));
-//      }
-      as_.setAborted(result_);
-      return false;
-//    }
+
+    as_.setAborted(result_);
+    return false;
   }
 
   bool pick(const std::string& obj_name, const geometry_msgs::Pose& pose)
   {
     ROS_INFO("[pick and place] Picking...");
 
+    // Try up to PICK_ATTEMPTS grasps with slightly different poses
     for (int attempt = 0; attempt < PICK_ATTEMPTS; ++attempt)
     {
       geometry_msgs::PoseStamped p;
@@ -221,35 +190,17 @@ public:
       {
         return false;
       }
-///// TODO
-//        # Set and id for this grasp (simply needs to be uniq#ue)
-//        g.id = str(len(grasps))
-//
-//        # Set the allowed touch objects to the input list
-//        g.allowed_touch_objects = allowed_touch_objects
-//
-//        # Don't restrict contact force
-//        g.max_contact_force = 0
-//
-//        # Degrade grasp quality for increasing pitch angles
-//        g.grasp_quality = 1.0 - abs(pitch)
-//
-//        # Append the grasp to the list
-//        grasps.append(deepcopy(g))
 
-      std::vector<moveit_msgs::Grasp> grasps;
       moveit_msgs::Grasp g;
       g.grasp_pose = p;
 
       g.pre_grasp_approach.direction.vector.x = 0.5;
-      //g.pre_grasp_approach.direction.vector.z = -0.5;
       g.pre_grasp_approach.direction.header.frame_id = arm_.getEndEffectorLink();
       g.pre_grasp_approach.min_distance = 0.005;
       g.pre_grasp_approach.desired_distance = 0.1;
 
       g.post_grasp_retreat.direction.header.frame_id = arm_.getEndEffectorLink();
       g.post_grasp_retreat.direction.vector.x = -0.5;
-//      g.post_grasp_retreat.direction.vector.z = 0.5;
       g.post_grasp_retreat.min_distance = 0.005;
       g.post_grasp_retreat.desired_distance = 0.1;
 
@@ -265,17 +216,18 @@ public:
 
       g.allowed_touch_objects.push_back("table");
 
-      grasps.push_back(g);
+      g.id = attempt;
+
+      std::vector<moveit_msgs::Grasp> grasps(1, g);
 
       if (arm_.pick(obj_name, grasps))
       {
         ROS_INFO("[pick and place] Pick successfully completed");
-
-        ros::Duration(2.0).sleep();
         return true;
       }
-      ros::Duration(1.0).sleep();
-      ros::spinOnce();
+      
+      if (attempt == 1)
+        clear_octomap_srv_.call(empty_srv_);
     }
 
     ROS_ERROR("[pick and place] Pick failed after %d attempts", PICK_ATTEMPTS);
@@ -286,7 +238,7 @@ public:
   {
     ROS_INFO("[pick and place] Placing...");
 
-    // place
+    // Try up to PLACE_ATTEMPTS place locations with slightly different poses
     for (int attempt = 0; attempt < PLACE_ATTEMPTS; ++attempt)
     {
       geometry_msgs::PoseStamped p;
@@ -297,18 +249,33 @@ public:
         return false;
       }
 
-      std::vector<moveit_msgs::PlaceLocation> loc;
+      if (attached_collision_objs_.size() > 0)
+      {
+        // MoveGroup::place will transform the provided place pose with the attached body pose, so the object retains
+        // the orientation it had when picked. However, with our 4-dofs arm this is infeasible (and also we don't care
+        // about the objects orientation), so we cancel this transformation. It is applied here:
+        // https://github.com/ros-planning/moveit_ros/blob/jade-devel/manipulation/pick_place/src/place.cpp#L64
+        // More details on this issue: https://github.com/ros-planning/moveit_ros/issues/577
+        geometry_msgs::Pose aco_pose = attached_collision_objs_[0].object.primitive_poses[0];
+
+        tf::Transform place_tf, aco_tf;
+        tf::poseMsgToTF(p.pose, place_tf);
+        tf::poseMsgToTF(aco_pose, aco_tf);
+        tf::poseTFToMsg(place_tf * aco_tf, p.pose);
+
+        ROS_DEBUG("Compensate place pose with the attached object pose [%s]. Results: [%s]",
+                  mtk::pose2str3D(aco_pose).c_str(), mtk::pose2str3D(p.pose).c_str());
+      }
+
       moveit_msgs::PlaceLocation l;
       l.place_pose = p;
 
       l.pre_place_approach.direction.vector.x = 0.5;
-//      l.pre_place_approach.direction.vector.z = -0.1;
       l.pre_place_approach.direction.header.frame_id = arm_.getEndEffectorLink();
       l.pre_place_approach.min_distance = 0.005;
       l.pre_place_approach.desired_distance = 0.1;
 
       l.post_place_retreat.direction.vector.x = -0.5;
-//      l.post_place_retreat.direction.vector.z = 0.1;
       l.post_place_retreat.direction.header.frame_id = arm_.getEndEffectorLink();
       l.post_place_retreat.min_distance = 0.005;
       l.post_place_retreat.desired_distance = 0.1;
@@ -320,75 +287,35 @@ public:
 
       l.allowed_touch_objects.push_back("table");
 
-      loc.push_back(l);
+      l.id = attempt;
 
-      // add path constraints
-//      moveit_msgs::Constraints constr;
-//      constr.orientation_constraints.resize(1);
-//      moveit_msgs::OrientationConstraint &ocm = constr.orientation_constraints[0];
-//      ocm.link_name = "r_wrist_roll_link";
-//      ocm.header.frame_id = p.header.frame_id;
-//      ocm.orientation.x = 0.0;
-//      ocm.orientation.y = 0.0;
-//      ocm.orientation.z = 0.0;
-//      ocm.orientation.w = 1.0;
-//      ocm.absolute_x_axis_tolerance = 0.2;
-//      ocm.absolute_y_axis_tolerance = 0.2;
-//      ocm.absolute_z_axis_tolerance = M_PI;
-//      ocm.weight = 1.0;
-      //  group.setPathConstraints(constr);
-//      group.setPlannerId("RRTConnectkConfigDefault");
+      std::vector<moveit_msgs::PlaceLocation> locs(1, l);
 
-
-      if (arm_.place(obj_name, loc))
+      if (arm_.place(obj_name, locs))
       {
         ROS_INFO("[pick and place] Place successfully completed");
         return true;
       }
-      ros::Duration(2.0).sleep();
-      ros::spinOnce();
+
+      if (attempt == 1)
+        clear_octomap_srv_.call(empty_srv_);
     }
 
     ROS_ERROR("[pick and place] Place failed after %d attempts", PLACE_ATTEMPTS);
     return false;
   }
 
-
 private:
-
   /**
-   * Move arm to a target pose. Only position coordinates are taken into account; the
-   * orientation is calculated according to the direction and distance to the target.
-   * @param target Pose target to achieve
+   * Convert a simple 3D point into a valid pick/place pose. The orientation Euler angles
+   * are calculated as a function of the x and y coordinates, plus some random variations
+   * Increasing with the number of attempts to improve our chances of successful planning.
+   * @param target Pose target to validate
+   * @param attempt The actual attempts number
    * @return True of success, false otherwise
    */
   bool validateTargetPose(geometry_msgs::PoseStamped& target, int attempt = 0)
   {
-    // Pitch angles to try
-    // pitch_vals = [0, 0.1, -0.1, 0.2, -0.2, 0.4, -0.4]
-
-    // Yaw angles to try; given the limited dofs of turtlebot_arm, we must calculate the heading
-    // from arm base to the object to pick (first we must transform its pose to arm base frame)
-    // target_pose_arm_ref = self.tf_listener.transformPose(ARM_BASE_FRAME, initial_pose_stamped)
-//      double x = p.pose.position.x;
-//      double y = p.pose.position.y;
-//
-//      double yaw = atan2(y, x);   // check in make_places method why we store the calculated yaw
-//      p.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 1.0, atan2(y, x));
-//yaw_vals = [0, 0.1,-0.1, self.pick_yaw]
-//
-//# Generate a grasp for each pitch and yaw angle
-//for yaw in yaw_vals:
-//    for pitch in pitch_vals:
-//        # Create a quaternion from the Euler angles
-//        q = quaternion_from_euler(0, pitch, yaw)
-//
-//        # Set the grasp pose orientation accordingly
-//        g.grasp_pose.pose.orientation.x = q[0]
-//        g.grasp_pose.pose.orientation.y = q[1]
-//        g.grasp_pose.pose.orientation.z = q[2]
-//        g.grasp_pose.pose.orientation.w = q[3]
-
     target.header.frame_id = arm_link;
 
     double x = target.pose.position.x;
@@ -397,24 +324,21 @@ private:
     double d = sqrt(x*x + y*y);
     if (d > 0.3)
     {
-      // Maximum reachable distance by the turtlebot arm is 30 cm
+      // Maximum reachable distance by the turtlebot arm is 30 cm, but above twenty something the arm makes
+      // strange and ugly contortions, and overcomes the reduced elbow lower limit we have to operate always
+      // with the same gripper orientation
+      // XXX solved constraining also both shoulder limits (180 deg. operation); we get back the 30 cm limit
       ROS_ERROR("[pick and place] Target pose out of reach [%f > %f]", d, 0.3);
       return false;
     }
-    // Pitch is 90 (vertical) at 10 cm from the arm base; the farther the target is, the closer to horizontal
-    // we point the gripper. Yaw is the direction to the target. We also try some random variations of both to
-    // increase the chances of successful planning.
 
     // Pitch is 90 (vertical) at 10 cm from the arm base; the farther the target is, the closer to horizontal
-    // we point the gripper (0.205 = arm's max reach - vertical pitch distance + ε). Yaw is the direction to
+    // we point the gripper (0.22 = arm's max reach - vertical pitch distance + ε). Yaw is the direction to
     // the target. We also try some random variations of both to increase the chances of successful planning.
-    // Roll is inverted with negative yaws so the arms doesn't make full turns when acting in different halfs
-    // of the working space.
-    // XXX: We don't need to try different values of yaw as long as this issue is implemented (or hacked) :
-    //      https://github.com/ros-planning/moveit_ros/issues/577
-    double rp = M_PI_2 - std::asin((d - 0.1)/0.205) + ((attempt%2)*2 - 1)*(std::ceil(attempt/2.0)*0.05);
-    double ry = std::atan2(y, x);
-    double rr = ry < 0.0 ? M_PI : 0.0;
+    // Roll is plainly ignored, as our arm lacks that dof.
+    double rp = M_PI_2 - std::asin((d - 0.1)/0.22) + ((attempt%2)*2 - 1)*(std::ceil(attempt/2.0)*0.05);
+    double ry = std::atan2(y, x) + ((attempt%2)*2 - 1)*(std::ceil(attempt/2.0)*0.05);
+    double rr = 0.0;
     target.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(rr, rp, ry);
 
     // Slightly increase z proportionally to pitch to avoid hitting the table with the lower gripper corner and
@@ -425,8 +349,7 @@ private:
     target.pose.position.z += z_delta1;
     target.pose.position.z += z_delta2;
 
-    ROS_DEBUG("[pick and place] Set pose target [%.2f, %.2f, %.2f] [d: %.2f, r: %.2f, p: %.2f, y: %.2f]",
-              x, y, z, d, rr, rp, ry);
+    ROS_DEBUG("[pick and place] Set pose target [%s] [d: %.2f]", mtk::pose2str3D(target.pose).c_str(), d);
     target_pose_pub_.publish(target);
 
     return true;
@@ -465,13 +388,15 @@ private:
 };
 
 
-
-
+/**
+ * Action server providing more basic arm motions:
+ *  - move to a named target
+ *  - move to a joint state configuration
+ *  - move to a particular pose target
+ */
 class MoveToTargetServer
 {
 private:
-
-  ros::NodeHandle nh_;
   actionlib::SimpleActionServer<turtlebot_arm_object_manipulation::MoveToTargetAction> as_;
   std::string action_name_;
 
@@ -486,10 +411,8 @@ private:
   moveit::planning_interface::MoveGroup gripper_;
 
 public:
-  MoveToTargetServer(const std::string name,
-                     const moveit::planning_interface::MoveGroup& arm,
-                     const moveit::planning_interface::MoveGroup& gripper) :
-    nh_("~"), as_(name, false), action_name_(name), arm_(arm), gripper_(gripper)
+  MoveToTargetServer(const std::string name) :
+    as_(name, false), action_name_(name), arm_("arm"), gripper_("gripper")
   {
     // Register the goal and feedback callbacks
     as_.registerGoalCallback(boost::bind(&MoveToTargetServer::goalCB, this));
@@ -497,7 +420,13 @@ public:
 
     as_.start();
 
-    target_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/target_pose", 1, true);
+    ros::NodeHandle nh("~");
+    target_pose_pub_ = nh.advertise<geometry_msgs::PoseStamped>("/target_pose", 1, true);
+  }
+
+  ~MoveToTargetServer()
+  {
+    as_.shutdown();
   }
 
   void goalCB()
@@ -526,16 +455,6 @@ public:
     {
       as_.setAborted(result_);
     }
-
-//    arm_.setNamedTarget(goal->named_target);
-//    arm_.setSupportSurfaceName("table");
-//
-//    // Allow some leeway in position (meters) and orientation (radians)
-//    arm_.setGoalPositionTolerance(0.001);
-//    arm_.setGoalOrientationTolerance(0.1);
-
-    // Allow replanning to increase the odds of a solution
-//    arm_.allowReplanning(true);
   }
 
   void preemptCB()
@@ -556,6 +475,9 @@ private:
    */
   bool moveArmTo(const std::string& target)
   {
+    if (target == "resting")  // XXX temporal cheat... blocks less fov to the camera
+      setGripper(0.002);
+
     ROS_DEBUG("[move to target] Move arm to '%s' position", target.c_str());
     if (arm_.setNamedTarget(target) == false)
     {
@@ -687,18 +609,16 @@ int main(int argc, char** argv)
 {
   ros::init(argc, argv, "pick_and_place_action_server");
 
+  // Create pick_and_place and move_to_target action servers
+  turtlebot_arm_object_manipulation::PickAndPlaceServer pnp_server("pick_and_place");
+  turtlebot_arm_object_manipulation::MoveToTargetServer mtt_server("move_to_target");
+
   // Setup an asynchronous spinner as the move groups operations need continuous spinning
   ros::AsyncSpinner spinner(4);
   spinner.start();
 
-  // Move groups to control arm and gripper with MoveIt!
-  moveit::planning_interface::MoveGroup arm("arm");
-  moveit::planning_interface::MoveGroup gripper("gripper");
-
-  turtlebot_arm_object_manipulation::PickAndPlaceServer pnp_server("pick_and_place", arm, gripper);
-  turtlebot_arm_object_manipulation::MoveToTargetServer mtt_server("move_to_target", arm, gripper);
-  ros::spin();
-
+  ros::waitForShutdown();
   spinner.stop();
+
   return 0;
 }
